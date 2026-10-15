@@ -129,11 +129,14 @@ class App {
     private readonly bmdLoader = new BMDLoader();
 
     private meshRefs: THREE.Mesh[] = [];
-    private attachmentSlots: Array<{ file: File | null; group: THREE.Group | null; boneIndex: number }> = Array.from({ length: 12 }, () => ({
-        file: null,
-        group: null,
-        boneIndex: 0,
-    }));
+    private attachmentSlots: Array<{
+        file: File | null;
+        customTextureFiles: File[];
+        group: THREE.Group | null;
+        boneIndex: number;
+    }> = [
+        { file: null, customTextureFiles: [], group: null, boneIndex: 0 }
+    ];
     private attachmentLoadToken = 0;
     private mainSkeleton: THREE.Skeleton | null = null;
 
@@ -673,6 +676,28 @@ class App {
 
         const exportAiGlbBtn = document.getElementById('export-ai-glb-btn') as HTMLButtonElement | null;
         if (exportAiGlbBtn) exportAiGlbBtn.addEventListener('click', () => this.exportToGLB({ bakeSkinning: true }));
+
+        const exportPngBtn = document.getElementById('export-png-btn') as HTMLButtonElement | null;
+        if (exportPngBtn) {
+            exportPngBtn.addEventListener('click', () => {
+                const qualitySelect = document.getElementById('export-quality-select') as HTMLSelectElement | null;
+                const transparentCheckbox = document.getElementById('export-transparent-bg') as HTMLInputElement | null;
+                const scale = parseInt(qualitySelect?.value || '2', 10) || 2;
+                const transparent = transparentCheckbox?.checked ?? true;
+                void this.exportHighQualityPNG(transparent, scale);
+            });
+        }
+
+        const characterExportPngBtn = document.getElementById('character-export-png-btn') as HTMLButtonElement | null;
+        if (characterExportPngBtn) {
+            characterExportPngBtn.addEventListener('click', () => {
+                const qualitySelect = document.getElementById('character-export-quality-select') as HTMLSelectElement | null;
+                const transparentCheckbox = document.getElementById('character-export-transparent-bg') as HTMLInputElement | null;
+                const scale = parseInt(qualitySelect?.value || '2', 10) || 2;
+                const transparent = transparentCheckbox?.checked ?? true;
+                void this.exportHighQualityPNG(transparent, scale);
+            });
+        }
         
         if (speedSlider) {
             speedSlider.addEventListener('input', (e) => {
@@ -1168,6 +1193,66 @@ class App {
     private handleTextureFile = (file: File) => {
         logger.debug(`[App] handleTextureFile("${file.name}")`);
         this.loadAndApplyTexture(file);
+    }
+
+    private async exportHighQualityPNG(transparent: boolean, scaleMultiplier: number) {
+        if (!this.loadedGroup) {
+            alert('Load a BMD model first.');
+            return;
+        }
+
+        const width = this.containerEl.clientWidth * scaleMultiplier;
+        const height = this.containerEl.clientHeight * scaleMultiplier;
+
+        const exportRenderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            preserveDrawingBuffer: true,
+            powerPreference: 'high-performance',
+        });
+        exportRenderer.outputColorSpace = THREE.SRGBColorSpace;
+        exportRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+        exportRenderer.toneMappingExposure = this.renderer.toneMappingExposure;
+        exportRenderer.shadowMap.enabled = this.renderer.shadowMap.enabled;
+        exportRenderer.shadowMap.type = this.renderer.shadowMap.type;
+        exportRenderer.setSize(width, height);
+        exportRenderer.setPixelRatio(1);
+
+        const oldBg = this.scene.background;
+        const oldGridVisible = this.gridHelper?.visible ?? false;
+
+        if (transparent) {
+            this.scene.background = null;
+            if (this.gridHelper) this.gridHelper.visible = false;
+        }
+
+        const aspect = width / height;
+        const oldAspect = this.camera.aspect;
+        this.camera.aspect = aspect;
+        this.camera.updateProjectionMatrix();
+
+        exportRenderer.render(this.scene, this.camera);
+
+        this.camera.aspect = oldAspect;
+        this.camera.updateProjectionMatrix();
+        this.scene.background = oldBg;
+        if (this.gridHelper) this.gridHelper.visible = oldGridVisible;
+
+        exportRenderer.domElement.toBlob(blob => {
+            if (!blob) {
+                alert('Failed to generate PNG image.');
+                exportRenderer.dispose();
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const modelName = (this.loadedGroup?.name || 'model').replace(/[^a-z0-9_-]/gi, '_');
+            a.download = `${modelName}_${width}x${height}_${transparent ? 'transparent' : 'solid'}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+            exportRenderer.dispose();
+        }, 'image/png');
     }
 
     private async exportToGLB(options: { bakeSkinning?: boolean } = {}) {
@@ -1805,35 +1890,59 @@ class App {
         if (!container) return;
         container.replaceChildren();
 
-        for (let i = 0; i < 12; i++) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'modern-btn btn-primary full-width mb-md';
+        addBtn.textContent = '+ Adicionar Slot de Attachment';
+        addBtn.addEventListener('click', () => {
+            this.attachmentSlots.push({ file: null, customTextureFiles: [], group: null, boneIndex: 0 });
+            this.initAttachmentsUI();
+        });
+        container.appendChild(addBtn);
+
+        this.attachmentSlots.forEach((slot, i) => {
             const slotEl = document.createElement('div');
             slotEl.className = 'control-section space-top-xs';
-            slotEl.style.padding = '8px';
-            slotEl.style.border = '1px solid rgba(255,255,255,0.1)';
+            slotEl.style.padding = '10px';
+            slotEl.style.border = '1px solid rgba(255,255,255,0.15)';
             slotEl.style.borderRadius = '6px';
+            slotEl.style.background = 'rgba(15, 23, 42, 0.6)';
+
+            const hasFile = slot.file !== null;
+            const fileName = slot.file ? slot.file.name : 'Nenhum arquivo .bmd';
+            const texCount = slot.customTextureFiles.length;
+            const texName = texCount > 0 ? `${texCount} textura(s) customizada(s)` : 'Usando textura principal';
 
             slotEl.innerHTML = `
                 <div class="row-inline mb-xs" style="justify-content: space-between;">
                     <span style="font-weight: 600; color: #38bdf8; font-size: 13px;">Slot ${i + 1}</span>
-                    <span id="attach-name-${i}" style="font-size: 12px; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">None</span>
+                    <button id="attach-del-slot-${i}" class="modern-btn btn-danger" style="padding: 2px 6px; font-size: 10px;" title="Remover este slot">Remover Slot ✕</button>
                 </div>
-                <div class="drop-zone" id="attach-drop-${i}" style="padding: 10px; min-height: 40px; margin-bottom: 6px;" title="Attach Model to Bone">
-                    <p style="font-size: 12px; margin: 0;">Solte <strong>.bmd</strong></p>
+                <div style="font-size: 11px; opacity: 0.9; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; font-family: monospace;" id="attach-name-${i}">${fileName}</div>
+                
+                <div class="drop-zone" id="attach-drop-${i}" style="padding: 8px; min-height: 36px; margin-bottom: 6px;" title="Soltar arquivo .bmd do attachment">
+                    <p style="font-size: 11px; margin: 0;">Solte <strong>.bmd</strong></p>
                     <input type="file" id="attach-input-${i}" accept=".bmd" class="file-input-hidden" />
                 </div>
-                <div id="attach-controls-${i}" class="initially-hidden">
-                    <select id="attach-bone-${i}" class="animation-dropdown full-width mb-xs" style="font-size: 12px; padding: 4px;">
-                        <option value="">-- Select Bone --</option>
+
+                <div class="drop-zone" id="attach-tex-drop-${i}" style="padding: 6px; min-height: 30px; margin-bottom: 6px; border-style: dashed; opacity: 0.85;" title="Soltar texturas customizadas opcionais para este attachment">
+                    <p style="font-size: 10px; margin: 0;">Textura Custom: <span id="attach-tex-name-${i}">${texName}</span></p>
+                    <input type="file" id="attach-tex-input-${i}" accept=".jpg,.jpeg,.png,.tga,.ozt,.ozj" multiple class="file-input-hidden" />
+                </div>
+
+                <div id="attach-controls-${i}" class="space-top-xs">
+                    <select id="attach-bone-${i}" class="animation-dropdown full-width mb-xs" style="font-size: 11px; padding: 4px;">
+                        <option value="">-- Selecionar Osso (Bone) --</option>
                     </select>
-                    <button id="attach-remove-${i}" class="modern-btn btn-danger" style="padding: 4px 8px; font-size: 11px; width: 100%;">Remover</button>
                 </div>
             `;
             container.appendChild(slotEl);
 
             const dropZone = slotEl.querySelector(`#attach-drop-${i}`) as HTMLElement;
             const fileInput = slotEl.querySelector(`#attach-input-${i}`) as HTMLInputElement;
+            const texDropZone = slotEl.querySelector(`#attach-tex-drop-${i}`) as HTMLElement;
+            const texInput = slotEl.querySelector(`#attach-tex-input-${i}`) as HTMLInputElement;
             const boneSelect = slotEl.querySelector(`#attach-bone-${i}`) as HTMLSelectElement;
-            const removeBtn = slotEl.querySelector(`#attach-remove-${i}`) as HTMLButtonElement;
+            const delSlotBtn = slotEl.querySelector(`#attach-del-slot-${i}`) as HTMLButtonElement;
 
             dropZone.addEventListener('click', () => fileInput.click());
             dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -1854,22 +1963,66 @@ class App {
                 fileInput.value = '';
             });
 
-            boneSelect.addEventListener('change', () => {
-                const boneIndex = parseInt(boneSelect.value, 10);
-                if (!isNaN(boneIndex)) {
-                    this.setSlotAttachmentBone(i, boneIndex);
+            texDropZone.addEventListener('click', () => texInput.click());
+            texDropZone.addEventListener('dragover', e => { e.preventDefault(); texDropZone.classList.add('drag-over'); });
+            texDropZone.addEventListener('dragleave', () => texDropZone.classList.remove('drag-over'));
+            texDropZone.addEventListener('drop', async e => {
+                e.preventDefault();
+                texDropZone.classList.remove('drag-over');
+                const files = Array.from(e.dataTransfer?.files || []);
+                if (files.length > 0) {
+                    slot.customTextureFiles = files;
+                    const texNameSpan = slotEl.querySelector(`#attach-tex-name-${i}`);
+                    if (texNameSpan) texNameSpan.textContent = `${files.length} custom texture(s)`;
+                    if (slot.file) {
+                        await this.loadSlotAttachment(i, slot.file);
+                    }
                 }
             });
-
-            removeBtn.addEventListener('click', () => {
-                this.removeSlotAttachment(i);
+            texInput.addEventListener('change', async e => {
+                const files = Array.from((e.target as HTMLInputElement).files || []);
+                if (files.length > 0) {
+                    slot.customTextureFiles = files;
+                    const texNameSpan = slotEl.querySelector(`#attach-tex-name-${i}`);
+                    if (texNameSpan) texNameSpan.textContent = `${files.length} custom texture(s)`;
+                    if (slot.file) {
+                        await this.loadSlotAttachment(i, slot.file);
+                    }
+                }
+                texInput.value = '';
             });
-        }
+
+            if (boneSelect && this.mainSkeleton) {
+                boneSelect.innerHTML = '<option value="">-- Selecionar Osso (Bone) --</option>';
+                this.mainSkeleton.bones.forEach((b, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = idx.toString();
+                    opt.textContent = `${idx}: ${b.name || 'Bone ' + idx}`;
+                    if (idx === slot.boneIndex) opt.selected = true;
+                    boneSelect.appendChild(opt);
+                });
+                boneSelect.addEventListener('change', () => {
+                    const boneIndex = parseInt(boneSelect.value, 10);
+                    if (!isNaN(boneIndex)) {
+                        this.setSlotAttachmentBone(i, boneIndex);
+                    }
+                });
+            }
+
+            delSlotBtn.addEventListener('click', () => {
+                this.removeSlotAttachment(i);
+                this.attachmentSlots.splice(i, 1);
+                if (this.attachmentSlots.length === 0) {
+                    this.attachmentSlots.push({ file: null, customTextureFiles: [], group: null, boneIndex: 0 });
+                }
+                this.initAttachmentsUI();
+            });
+        });
     }
 
     private async loadSlotAttachment(slotIndex: number, file: File) {
         if (!this.loadedGroup || !this.mainSkeleton) {
-            alert('Load a main model with a skeleton first.');
+            alert('Carregue um modelo principal com esqueleto primeiro.');
             return;
         }
 
@@ -1877,18 +2030,29 @@ class App {
             await FileValidator.validateBMDFile(file);
             const buffer = await file.arrayBuffer();
             const bmd = this.bmdLoader.parse(buffer, { bindPoseOnly: true });
-            const group = await this.buildThumbnailGroup(bmd, this.folderTextureFiles);
+
+            const slot = this.attachmentSlots[slotIndex];
+            const mainTexFiles = Array.from(this.appliedTextureFiles.values());
+            const allAvailableTextures = Array.from(new Map([
+                ...this.folderTextureFiles.map(f => [this.fileCacheKey(f), f] as [string, File]),
+                ...mainTexFiles.map(f => [this.fileCacheKey(f), f] as [string, File]),
+            ].values()));
+            const texturesToUse = [...slot.customTextureFiles, ...allAvailableTextures];
+            const group = await this.buildThumbnailGroup(bmd, texturesToUse);
             this.applySceneMaterialTuning(group);
 
             this.removeSlotAttachment(slotIndex);
 
-            this.attachmentSlots[slotIndex].file = file;
-            this.attachmentSlots[slotIndex].group = group;
-            this.attachmentSlots[slotIndex].boneIndex = 0;
+            slot.file = file;
+            slot.group = group;
+            slot.boneIndex = slot.boneIndex || 0;
 
-            const bone = this.mainSkeleton.bones[0];
-            if (bone) {
-                bone.add(group);
+            const targetBone = this.mainSkeleton.bones[slot.boneIndex] || this.mainSkeleton.bones[0];
+            if (targetBone) {
+                targetBone.add(group);
+                group.position.set(0, 0, 0);
+                group.rotation.set(0, 0, 0);
+                group.scale.set(1, 1, 1);
             } else {
                 this.scene.add(group);
             }
@@ -1896,25 +2060,22 @@ class App {
             const nameEl = document.getElementById(`attach-name-${slotIndex}`);
             if (nameEl) nameEl.textContent = file.name;
 
-            const controlsEl = document.getElementById(`attach-controls-${slotIndex}`);
-            if (controlsEl) controlsEl.style.display = 'block';
-
             const boneSelect = document.getElementById(`attach-bone-${slotIndex}`) as HTMLSelectElement;
-            if (boneSelect) {
-                boneSelect.innerHTML = '<option value="">-- Select Bone --</option>';
+            if (boneSelect && this.mainSkeleton) {
+                boneSelect.innerHTML = '<option value="">-- Selecionar Osso (Bone) --</option>';
                 this.mainSkeleton.bones.forEach((b, idx) => {
                     const opt = document.createElement('option');
                     opt.value = idx.toString();
                     opt.textContent = `${idx}: ${b.name || 'Bone ' + idx}`;
+                    if (idx === slot.boneIndex) opt.selected = true;
                     boneSelect.appendChild(opt);
                 });
-                boneSelect.value = '0';
             }
 
             this.setStatusMessage(`Attached ${file.name} to slot ${slotIndex + 1}.`);
         } catch (error) {
             logger.error(`Failed to load attachment for slot ${slotIndex}:`, error);
-            alert(`Failed to load attachment: ${(error as Error).message}`);
+            alert(`Falha ao carregar attachment: ${(error as Error).message}`);
         }
     }
 
@@ -1948,15 +2109,6 @@ class App {
         slot.file = null;
         slot.group = null;
         slot.boneIndex = 0;
-
-        const nameEl = document.getElementById(`attach-name-${slotIndex}`);
-        if (nameEl) nameEl.textContent = 'None';
-
-        const controlsEl = document.getElementById(`attach-controls-${slotIndex}`);
-        if (controlsEl) controlsEl.style.display = 'none';
-
-        const boneSelect = document.getElementById(`attach-bone-${slotIndex}`) as HTMLSelectElement;
-        if (boneSelect) boneSelect.value = '';
     }
     
     //----------------------------------------------------------
@@ -2370,8 +2522,11 @@ class App {
     }
 
     private fileCacheKey(file: File): string {
-        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-        return `${relativePath || file.name}|${file.size}|${file.lastModified}`.toLowerCase();
+        const relativePath = (file as File & { webkitRelativePath?: string })?.webkitRelativePath;
+        const name = file?.name ?? '';
+        const size = file?.size ?? 0;
+        const lastModified = file?.lastModified ?? 0;
+        return `${relativePath || name}|${size}|${lastModified}`.toLowerCase();
     }
 
     private thumbCacheKey(index: number): string | null {
@@ -2461,9 +2616,11 @@ class App {
         // --- Texture lookup: base-name (no ext) → File ---
         const texByBase = new Map<string, File>();
         for (const f of textureFiles) {
+            if (!f || typeof f.name !== 'string') continue;
             const base = f.name.toLowerCase().replace(/\.[^.]+$/, '');
             if (!texByBase.has(base)) texByBase.set(base, f);
         }
+        const firstTexFile = textureFiles.find(f => f && typeof f.name === 'string');
 
         const loader = new THREE.TextureLoader();
         const group = new THREE.Group();
@@ -2489,7 +2646,7 @@ class App {
                     const boneMat = boneWorldMats[vert.node];
                     if (boneMat) {
                         tmpVec.set(vert.position.x, vert.position.y, vert.position.z)
-                               .applyMatrix4(boneMat);
+                                .applyMatrix4(boneMat);
                         positions.push(tmpVec.x, tmpVec.y, tmpVec.z);
                     } else {
                         positions.push(vert.position.x, vert.position.y, vert.position.z);
@@ -2523,11 +2680,21 @@ class App {
 
             // Try to find and load a matching texture
             let material: THREE.MeshPhongMaterial = this.thumbnailMaterial;
-            if (texByBase.size > 0 && bmdMesh.texturePath) {
-                const wantedName = bmdMesh.texturePath.split(/[\\/]/).pop()!.toLowerCase();
-                const wantedBase = wantedName.replace(/\.[^.]+$/, '');
-                const texFile = texByBase.get(wantedBase);
-                if (texFile) {
+            if (textureFiles.length > 0) {
+                let texFile: File | undefined = undefined;
+                if (bmdMesh.texturePath && typeof bmdMesh.texturePath === 'string') {
+                    const parts = bmdMesh.texturePath.split(/[\\/]/);
+                    const lastPart = parts.pop();
+                    if (lastPart) {
+                        const wantedName = lastPart.toLowerCase();
+                        const wantedBase = wantedName.replace(/\.[^.]+$/, '');
+                        texFile = texByBase.get(wantedBase);
+                    }
+                }
+                if (!texFile) {
+                    texFile = firstTexFile;
+                }
+                if (texFile && typeof texFile.name === 'string') {
                     try {
                         const cacheKey = this.fileCacheKey(texFile);
                         const ext = texFile.name.toLowerCase().split('.').pop()!;

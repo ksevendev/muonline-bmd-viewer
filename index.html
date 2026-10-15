@@ -234,7 +234,21 @@
                 <span>× frames</span>
               </div>
               <button id="export-gif-btn" class="modern-btn btn-primary">Export GIF</button>
-              <div class="stack-sm">
+              <div class="section-divider space-top-sm">
+                <label for="export-quality-select" class="field-label">Qualidade / Resolução</label>
+                <select id="export-quality-select" class="animation-dropdown full-width mb-sm">
+                  <option value="1">Standard (1x)</option>
+                  <option value="2" selected>HD (2x)</option>
+                  <option value="3">2K Ultra (3x)</option>
+                  <option value="4">4K Pro (4x)</option>
+                </select>
+                <div class="checkbox-control space-bottom-xs">
+                  <label for="export-transparent-bg">Fundo Transparente (PNG)</label>
+                  <input type="checkbox" id="export-transparent-bg" class="modern-checkbox" checked>
+                </div>
+              </div>
+              <button id="export-png-btn" class="modern-btn btn-primary space-top-xs" style="background: #059669; color: #ffffff;">Exportar PNG (Alta Qualidade)</button>
+              <div class="stack-sm space-top-sm">
                 <button id="export-glb-btn" class="modern-btn btn-primary">Export GLB</button>
                 <button id="export-ai-glb-btn" class="modern-btn">Export AI GLB (Baked)</button>
                 <button id="export-textures-btn" disabled class="modern-btn">Export Textures (PNG)</button>
@@ -498,6 +512,20 @@
                 <span>× frames</span>
               </div>
               <button id="character-export-gif-btn" class="modern-btn btn-primary">Exportar GIF</button>
+              <div class="section-divider space-top-sm">
+                <label for="character-export-quality-select" class="field-label">Qualidade / Resolução</label>
+                <select id="character-export-quality-select" class="animation-dropdown full-width mb-sm">
+                  <option value="1">Standard (1x)</option>
+                  <option value="2" selected>HD (2x)</option>
+                  <option value="3">2K Ultra (3x)</option>
+                  <option value="4">4K Pro (4x)</option>
+                </select>
+                <div class="checkbox-control space-bottom-xs">
+                  <label for="character-export-transparent-bg">Fundo Transparente (PNG)</label>
+                  <input type="checkbox" id="character-export-transparent-bg" class="modern-checkbox" checked>
+                </div>
+              </div>
+              <button id="character-export-png-btn" class="modern-btn btn-primary space-top-xs" style="background: #059669; color: #ffffff;">Exportar PNG (Alta Qualidade)</button>
               <button id="character-export-hd-btn" class="modern-btn space-top-xs" style="background: #1f2937; color: #38bdf8; border: 1px solid #38bdf8;">Capturar Imagem HD (Transparente)</button>
               <button id="character-record-video-btn" class="modern-btn space-top-xs" style="background: #1f2937; color: #a855f7; border: 1px solid #a855f7;">Gravar Vídeo WebM (60 FPS)</button>
             </div>
