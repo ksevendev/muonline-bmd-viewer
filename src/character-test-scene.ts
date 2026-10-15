@@ -203,6 +203,10 @@ export class CharacterTestScene {
   private leftWeaponSelect!: HTMLSelectElement;
   private rightWeaponSelect!: HTMLSelectElement;
   private wingSelect!: HTMLSelectElement;
+  private mountSelect!: HTMLSelectElement;
+  private pendantSelect!: HTMLSelectElement;
+  private ring1Select!: HTMLSelectElement;
+  private ring2Select!: HTMLSelectElement;
   private animationSelect!: HTMLSelectElement;
   private autoRotateCheckbox!: HTMLInputElement;
   private speedSlider!: HTMLInputElement;
@@ -216,6 +220,8 @@ export class CharacterTestScene {
   private itemExcellentIntensitySlider!: HTMLInputElement;
   private itemExcellentIntensityValueEl!: HTMLElement;
   private exportGifBtn!: HTMLButtonElement;
+  private exportHdBtn!: HTMLButtonElement;
+  private recordVideoBtn!: HTMLButtonElement;
   private gifWidthInput!: HTMLInputElement;
   private gifHeightInput!: HTMLInputElement;
   private gifDelayInput!: HTMLInputElement;
@@ -471,6 +477,49 @@ export class CharacterTestScene {
     this.leftWeaponSelect = document.getElementById('character-left-weapon-select') as HTMLSelectElement;
     this.rightWeaponSelect = document.getElementById('character-right-weapon-select') as HTMLSelectElement;
     this.wingSelect = document.getElementById('character-wing-select') as HTMLSelectElement;
+    this.mountSelect = document.getElementById('character-mount-select') as HTMLSelectElement;
+    this.pendantSelect = document.getElementById('character-pendant-select') as HTMLSelectElement;
+    this.ring1Select = document.getElementById('character-ring1-select') as HTMLSelectElement;
+    this.ring2Select = document.getElementById('character-ring2-select') as HTMLSelectElement;
+
+    const mpDrop = document.getElementById('character-multipart-drop');
+    const mpInput = document.getElementById('character-multipart-input') as HTMLInputElement;
+    if (mpDrop && mpInput) {
+      mpDrop.addEventListener('click', () => mpInput.click());
+      mpDrop.addEventListener('dragover', e => { e.preventDefault(); mpDrop.classList.add('drag-over'); });
+      mpDrop.addEventListener('dragleave', () => mpDrop.classList.remove('drag-over'));
+      mpDrop.addEventListener('drop', e => {
+        e.preventDefault();
+        mpDrop.classList.remove('drag-over');
+        if (e.dataTransfer?.files?.length) {
+          for (const f of Array.from(e.dataTransfer.files)) {
+            const path = normalizeDataPath(f.name);
+            this.dataFiles.set(path, f);
+            if (path.endsWith('.bmd')) {
+              this.registerCustomItem(path, f.name);
+            }
+          }
+          this.statusEl.textContent = `${e.dataTransfer.files.length} arquivos adicionados. Reconstruindo...`;
+          this.populateItemSelects();
+          this.scheduleRebuild();
+        }
+      });
+      mpInput.addEventListener('change', e => {
+        const list = (e.target as HTMLInputElement).files;
+        if (list?.length) {
+          for (const f of Array.from(list)) {
+            const path = normalizeDataPath(f.name);
+            this.dataFiles.set(path, f);
+            if (path.endsWith('.bmd')) {
+              this.registerCustomItem(path, f.name);
+            }
+          }
+          this.statusEl.textContent = `${list.length} arquivos adicionados. Reconstruindo...`;
+          this.populateItemSelects();
+          this.scheduleRebuild();
+        }
+      });
+    }
     this.animationSelect = document.getElementById('character-animation-select') as HTMLSelectElement;
     this.autoRotateCheckbox = document.getElementById('character-auto-rotate') as HTMLInputElement;
     this.speedSlider = document.getElementById('character-speed-slider') as HTMLInputElement;
@@ -484,6 +533,8 @@ export class CharacterTestScene {
     this.itemExcellentIntensitySlider = document.getElementById('character-excellent-intensity') as HTMLInputElement;
     this.itemExcellentIntensityValueEl = document.getElementById('character-excellent-intensity-value') as HTMLElement;
     this.exportGifBtn = document.getElementById('character-export-gif-btn') as HTMLButtonElement;
+    this.exportHdBtn = document.getElementById('character-export-hd-btn') as HTMLButtonElement;
+    this.recordVideoBtn = document.getElementById('character-record-video-btn') as HTMLButtonElement;
     this.gifWidthInput = document.getElementById('character-gif-width-input') as HTMLInputElement;
     this.gifHeightInput = document.getElementById('character-gif-height-input') as HTMLInputElement;
     this.gifDelayInput = document.getElementById('character-gif-delay-input') as HTMLInputElement;
@@ -562,6 +613,8 @@ export class CharacterTestScene {
     });
 
     this.exportGifBtn.addEventListener('click', () => this.exportGif());
+    this.exportHdBtn.addEventListener('click', () => this.exportHdImage());
+    this.recordVideoBtn.addEventListener('click', () => this.recordVideo());
 
     this.showSkeletonCheckbox.addEventListener('change', () => {
       this.updateSkeletonHelperState();
@@ -673,6 +726,10 @@ export class CharacterTestScene {
     this.leftWeaponSelect.addEventListener('change', onChange);
     this.rightWeaponSelect.addEventListener('change', onChange);
     this.wingSelect.addEventListener('change', onChange);
+    this.mountSelect.addEventListener('change', onChange);
+    this.pendantSelect.addEventListener('change', onChange);
+    this.ring1Select.addEventListener('change', onChange);
+    this.ring2Select.addEventListener('change', onChange);
 
     this.animationSelect.addEventListener('change', () => {
       const idx = parseInt(this.animationSelect.value, 10);
@@ -811,6 +868,31 @@ export class CharacterTestScene {
     return true;
   }
 
+  private registerCustomItem(path: string, fileName: string) {
+    let group = 0;
+    const lower = fileName.toLowerCase();
+    if (lower.includes('helm') || lower.includes('cap')) group = 7;
+    else if (lower.includes('armor') || lower.includes('buff') || lower.includes('plate') || lower.includes('class')) group = 8;
+    else if (lower.includes('pant')) group = 9;
+    else if (lower.includes('glove')) group = 10;
+    else if (lower.includes('boot')) group = 11;
+    else if (lower.includes('wing') || lower.includes('cape')) group = 12;
+    else if (lower.includes('mount') || lower.includes('dinorant') || lower.includes('fenrir')) group = 13;
+    else if (lower.includes('ring')) group = 15;
+    else if (lower.includes('pendant')) group = 14;
+
+    const id = this.itemDefinitions.length + 1000;
+    const itemDef: ItemDefinition = {
+      group,
+      id,
+      itemName: fileName.replace(/\.[^/.]+$/, ''),
+      modelName: fileName.replace(/\.[^/.]+$/, ''),
+      modelPath: path,
+    };
+    this.itemDefinitions.push(itemDef);
+    this.itemByKey.set(`${group}:${id}`, itemDef);
+  }
+
   private populateItemSelects() {
     const groups = new Map<number, ItemDefinition[]>();
     for (const item of this.itemDefinitions) {
@@ -845,6 +927,10 @@ export class CharacterTestScene {
     this.fillSelect(this.rightWeaponSelect, weapons, 'None');
 
     this.fillSelect(this.wingSelect, sortItems(groups.get(12)), 'None');
+    this.fillSelect(this.mountSelect, sortItems(groups.get(13) || groups.get(14) || groups.get(15)), 'None');
+    this.fillSelect(this.pendantSelect, sortItems(groups.get(14)), 'None');
+    this.fillSelect(this.ring1Select, sortItems(groups.get(15)), 'None');
+    this.fillSelect(this.ring2Select, sortItems(groups.get(15)), 'None');
   }
 
   private fillSelect(select: HTMLSelectElement, items: ItemDefinition[], noneLabel: string) {
@@ -962,6 +1048,7 @@ export class CharacterTestScene {
 
     const baseParts = [
       { path: `Player/HelmClass${classToken}.bmd`, label: `Base HelmClass${classToken}` },
+      { path: `Player/ArmorClass${classToken}.bmd`, label: `Base ArmorClass${classToken}` },
       { path: `Player/PantClass${classToken}.bmd`, label: `Base PantClass${classToken}` },
       { path: `Player/GloveClass${classToken}.bmd`, label: `Base GloveClass${classToken}` },
       { path: `Player/BootClass${classToken}.bmd`, label: `Base BootClass${classToken}` },
@@ -990,6 +1077,10 @@ export class CharacterTestScene {
       { select: this.leftWeaponSelect, type: 'weapon' as const, bone: 33, label: 'Left Weapon' },
       { select: this.rightWeaponSelect, type: 'weapon' as const, bone: 42, label: 'Right Weapon' },
       { select: this.wingSelect, type: 'wing' as const, bone: 47, label: 'Wings' },
+      { select: this.mountSelect, type: 'weapon' as const, bone: 0, label: 'Mount' },
+      { select: this.pendantSelect, type: 'weapon' as const, bone: 6, label: 'Pendant' },
+      { select: this.ring1Select, type: 'weapon' as const, bone: 10, label: 'Ring 1' },
+      { select: this.ring2Select, type: 'weapon' as const, bone: 11, label: 'Ring 2' },
     ];
 
     for (const entry of selections) {
@@ -1645,7 +1736,16 @@ export class CharacterTestScene {
     const normalized = normalizeDataPath(relativePath);
 
     if (this.dataFiles.size > 0) {
-      const file = this.dataFiles.get(normalized);
+      let file = this.dataFiles.get(normalized);
+      if (!file) {
+        const baseName = normalized.split('/').pop() || normalized;
+        for (const [key, f] of this.dataFiles.entries()) {
+          if (key === baseName || key.endsWith(`/${baseName}`)) {
+            file = f;
+            break;
+          }
+        }
+      }
       if (!file) return null;
       return { name: file.name, buffer: await file.arrayBuffer() };
     }
@@ -2033,6 +2133,77 @@ export class CharacterTestScene {
         skinned.boundingBox.copy(geometry.boundingBox);
       }
     });
+  }
+
+  private exportHdImage() {
+    if (!this.characterRoot) {
+      alert('Carregue um personagem primeiro.');
+      return;
+    }
+    this.statusEl.textContent = 'Gerando imagem HD com fundo transparente...';
+
+    const oldBg = this.scene.background ? (this.scene.background as THREE.Color).clone() : null;
+    this.scene.background = null;
+    const oldGridVisible = this.gridHelper?.visible ?? false;
+    if (this.gridHelper) this.gridHelper.visible = false;
+
+    this.renderer.render(this.scene, this.camera);
+    const dataUrl = this.renderer.domElement.toDataURL('image/png');
+
+    if (oldBg) this.scene.background = oldBg;
+    if (this.gridHelper) this.gridHelper.visible = oldGridVisible;
+
+    const link = document.createElement('a');
+    link.download = `mu-online-character-hd-${Date.now()}.png`;
+    link.href = dataUrl;
+    link.click();
+
+    this.statusEl.textContent = 'Imagem HD exportada com sucesso!';
+  }
+
+  private recordVideo() {
+    if (!this.characterRoot) {
+      alert('Carregue um personagem primeiro.');
+      return;
+    }
+    const canvas = this.renderer.domElement;
+    if (!(canvas as any).captureStream) {
+      alert('MediaRecorder captureStream não é suportado neste navegador.');
+      return;
+    }
+
+    this.statusEl.textContent = 'Gravando vídeo WebM (5 segundos)...';
+    this.recordVideoBtn.disabled = true;
+
+    try {
+      const stream = (canvas as HTMLCanvasElement).captureStream(60);
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = e => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `mu-online-animation-${Date.now()}.webm`;
+        link.href = url;
+        link.click();
+        this.recordVideoBtn.disabled = false;
+        this.statusEl.textContent = 'Vídeo gravado e baixado com sucesso!';
+      };
+
+      recorder.start();
+      setTimeout(() => {
+        recorder.stop();
+      }, 5000);
+    } catch (err) {
+      console.error(err);
+      this.recordVideoBtn.disabled = false;
+      this.statusEl.textContent = 'Falha ao gravar vídeo.';
+    }
   }
 
   private exportGif() {

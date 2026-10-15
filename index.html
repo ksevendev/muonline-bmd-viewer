@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MU Online BMD Viewer</title>
+  <title>MU Online BMD Viewer & Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -19,22 +19,22 @@
     <div class="top-bar">
       <div class="top-bar-brand">
         <span class="top-bar-eyebrow">MU Online Toolkit</span>
-        <span class="top-bar-title">Client Editor</span>
+        <span class="top-bar-title">Editor do Cliente 3D</span>
       </div>
       <div class="sidebar-tabs" id="sidebar-tabs">
-        <button class="tab-btn active" data-view="bmd">Model</button>
-        <button class="tab-btn" data-view="character">Character</button>
-        <button class="tab-btn" data-view="terrain">World</button>
-        <button class="tab-btn" data-view="att">ATT</button>
-        <button class="tab-btn" data-view="ozj">OZJ</button>
-        <button class="tab-btn" data-view="items">Items</button>
-        <button class="tab-btn" data-view="skills">Skills</button>
-        <button class="tab-btn" data-view="gfx">GFx</button>
-        <button class="tab-btn" data-view="sound">Sound</button>
+        <button class="tab-btn active" data-view="bmd">Modelos</button>
+        <button class="tab-btn" data-view="character">Personagem</button>
+        <button class="tab-btn" data-view="terrain">Mundo</button>
+        <button class="tab-btn" data-view="att">Atributos (ATT)</button>
+        <button class="tab-btn" data-view="ozj">Texturas (OZJ)</button>
+        <button class="tab-btn" data-view="items">Itens</button>
+        <button class="tab-btn" data-view="skills">Habilidades</button>
+        <button class="tab-btn" data-view="gfx">Interface (GFx)</button>
+        <button class="tab-btn" data-view="sound">Sons</button>
       </div>
       <div class="top-bar-actions">
-        <div class="sidebar-view-badge" id="sidebar-view-badge">Model workspace</div>
-        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle Controls">
+        <div class="sidebar-view-badge" id="sidebar-view-badge">Espaço de Modelo</div>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Alternar Painel de Controles">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M4 6H20M4 12H20M4 18H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
@@ -56,67 +56,67 @@
 
         <div id="sidebar-bmd" class="sidebar-view">
           <div class="control-section" id="bmd-import-section"
-            data-menu-description="Start here. Load the base model, an optional animation file and any missing textures."
-            data-menu-badge="Start">
-            <h3>Import Assets</h3>
+            data-menu-description="Comece aqui. Carregue o modelo principal, arquivos de animação e múltiplas partes ou texturas de uma só vez."
+            data-menu-badge="Início">
+            <h3>Importar Ativos (Múltiplas Partes)</h3>
 
-            <div class="drop-zone" id="bmd-drop-zone" title="Load Main Model">
-              <p>Drop <strong>.bmd</strong> model here</p>
-              <input type="file" id="bmd-file-input" accept=".bmd" class="file-input-hidden" />
+            <div class="drop-zone" id="bmd-drop-zone" title="Carregar Múltiplos Modelos BMD">
+              <p>Solte <strong>múltiplos .bmd</strong> ou partes aqui</p>
+              <input type="file" id="bmd-file-input" accept=".bmd" multiple class="file-input-hidden" />
             </div>
 
-            <div class="drop-zone drop-zone-folder" id="folder-bmd-drop-zone" title="Browse a folder of .bmd models">
-              <p>Drop or select <strong>folder</strong> with .bmd files</p>
+            <div class="drop-zone drop-zone-folder" id="folder-bmd-drop-zone" title="Navegar em pasta de modelos .bmd">
+              <p>Solte ou selecione uma <strong>pasta</strong> com arquivos .bmd</p>
               <input type="file" id="folder-bmd-input" webkitdirectory directory multiple class="file-input-hidden" />
             </div>
 
-            <div class="drop-zone" id="anim-bmd-drop-zone" title="Load External Animations">
-              <p>Drop animation <strong>.bmd</strong> (optional)</p>
+            <div class="drop-zone" id="anim-bmd-drop-zone" title="Carregar Animações Externas">
+              <p>Solte o arquivo de animação <strong>.bmd</strong> (opcional)</p>
               <input type="file" id="anim-bmd-file-input" accept=".bmd" class="file-input-hidden" />
             </div>
 
             <div id="texture-controls" class="initially-hidden section-gap">
               <p id="texture-info-text" class="control-note accent-note"></p>
               <div class="drop-zone" id="texture-drop-zone">
-                <p>Drop textures (.jpg, .tga, .ozj)</p>
+                <p>Solte as texturas (.jpg, .tga, .ozj, .ozt) em lote</p>
                 <input type="file" id="texture-file-input" accept=".jpg,.jpeg,.png,.tga,.ozt,.ozj" multiple
                   class="file-input-hidden" />
               </div>
-              <button id="remove-textures-btn" class="modern-btn space-top-xs">Remove Textures</button>
+              <button id="remove-textures-btn" class="modern-btn space-top-xs">Remover Texturas</button>
             </div>
           </div>
 
           <div class="control-section" id="bmd-animation-section"
-            data-menu-description="Playback controls stay up front so you can preview motion without opening advanced panels."
-            data-menu-badge="Core">
-            <h3>Animation Settings</h3>
+            data-menu-description="Controles de reprodução de animação em tempo real."
+            data-menu-badge="Núcleo">
+            <h3>Configurações de Animação</h3>
 
             <div class="slider-control">
               <div class="slider-label">
-                <span>Playback Speed</span>
+                <span>Velocidade de Reprodução</span>
                 <span class="slider-value" id="speed-value">0.20x</span>
               </div>
               <input type="range" id="speed-slider" class="modern-slider" min="0.1" max="2.0" step="0.1" value="0.2">
             </div>
 
             <div class="checkbox-control">
-              <label for="animations-enabled-checkbox">Enable Animations</label>
+              <label for="animations-enabled-checkbox">Ativar Animações</label>
               <input type="checkbox" id="animations-enabled-checkbox" class="modern-checkbox" checked>
             </div>
 
             <div class="checkbox-control">
-              <label for="auto-rotate-checkbox">Auto-rotate Model</label>
+              <label for="auto-rotate-checkbox">Girar Modelo Automaticamente</label>
               <input type="checkbox" id="auto-rotate-checkbox" class="modern-checkbox" checked>
             </div>
 
             <div id="frame-lock-controls" class="section-divider initially-hidden">
               <div class="checkbox-control">
-                <label for="lock-frame-checkbox">Lock specific frame</label>
+                <label for="lock-frame-checkbox">Travar quadro específico</label>
                 <input type="checkbox" id="lock-frame-checkbox" class="modern-checkbox">
               </div>
               <div class="row-inline row-top-gap">
                 <input type="number" id="lock-frame-input" class="frame-input input-w-sm" value="0" min="0" step="1">
-                <button id="lock-current-btn" class="lock-btn">Set Current</button>
+                <button id="lock-current-btn" class="lock-btn">Definir Atual</button>
               </div>
             </div>
           </div>
@@ -189,31 +189,10 @@
           </div>
 
           <div class="control-section" id="bmd-attachment-section"
-            data-menu-description="Attach a secondary model to a bone after the main asset is already previewing correctly."
+            data-menu-description="Attach up to 12 secondary models to bones simultaneously."
             data-menu-badge="Advanced">
-            <h3>Attachment</h3>
-
-            <div class="drop-zone" id="attach-drop-zone" title="Attach Model to Bone">
-              <p>Drop attachment <strong>.bmd</strong></p>
-              <input type="file" id="attach-bmd-input" accept=".bmd" class="file-input-hidden" />
-            </div>
-
-            <div id="attach-controls" class="initially-hidden section-gap">
-              <label for="attach-bone-select" class="field-label">Select Bone</label>
-              <select id="attach-bone-select" class="animation-dropdown full-width mb-sm">
-                <option value="">-- Select Bone --</option>
-              </select>
-
-              <div class="slider-control space-top-sm">
-                <div class="slider-label">
-                  <span>Bone Navigation</span>
-                  <span class="slider-value" id="attach-bone-value">0</span>
-                </div>
-                <input type="range" id="attach-bone-slider" class="modern-slider" min="0" max="0" step="1" value="0">
-              </div>
-
-              <button id="undo-attach-btn" class="modern-btn btn-danger space-top-md">Remove Attachment</button>
-            </div>
+            <h3>Attachments (Max 12)</h3>
+            <div id="attachments-container" class="stack-md"></div>
           </div>
 
           <div class="control-section" id="diagnostics-panel"
@@ -338,10 +317,38 @@
               <option value="">None</option>
             </select>
 
-            <label for="character-wing-select" class="field-label">Wings</label>
-            <select id="character-wing-select" class="animation-dropdown full-width">
+            <label for="character-wing-select" class="field-label">Wings / Asas</label>
+            <select id="character-wing-select" class="animation-dropdown full-width mb-sm">
               <option value="">None</option>
             </select>
+
+            <label for="character-mount-select" class="field-label">Mount / Montaria</label>
+            <select id="character-mount-select" class="animation-dropdown full-width mb-sm">
+              <option value="">None</option>
+            </select>
+
+            <label for="character-pendant-select" class="field-label">Pendant / Colar</label>
+            <select id="character-pendant-select" class="animation-dropdown full-width mb-sm">
+              <option value="">None</option>
+            </select>
+
+            <label for="character-ring1-select" class="field-label">Ring 1 / Anel 1</label>
+            <select id="character-ring1-select" class="animation-dropdown full-width mb-sm">
+              <option value="">None</option>
+            </select>
+
+            <label for="character-ring2-select" class="field-label">Ring 2 / Anel 2</label>
+            <select id="character-ring2-select" class="animation-dropdown full-width mb-sm">
+              <option value="">None</option>
+            </select>
+
+            <div class="section-divider space-top-sm">
+              <p class="control-note">Importação Direta de Peças (Múltiplas Partes / Custom .bmd):</p>
+              <div class="drop-zone space-top-xs" id="character-multipart-drop" title="Solte múltiplos .bmd de armaduras/armas aqui">
+                <p>Solte múltiplos <strong>.bmd</strong> (helm, armor, pant, glove, boot, weapon)</p>
+                <input type="file" id="character-multipart-input" accept=".bmd" multiple class="file-input-hidden" />
+              </div>
+            </div>
           </div>
 
           <div class="control-section" id="character-effects-section"
@@ -490,7 +497,9 @@
                   max="8" step="1">
                 <span>× frames</span>
               </div>
-              <button id="character-export-gif-btn" class="modern-btn btn-primary">Export GIF</button>
+              <button id="character-export-gif-btn" class="modern-btn btn-primary">Exportar GIF</button>
+              <button id="character-export-hd-btn" class="modern-btn space-top-xs" style="background: #1f2937; color: #38bdf8; border: 1px solid #38bdf8;">Capturar Imagem HD (Transparente)</button>
+              <button id="character-record-video-btn" class="modern-btn space-top-xs" style="background: #1f2937; color: #a855f7; border: 1px solid #a855f7;">Gravar Vídeo WebM (60 FPS)</button>
             </div>
           </div>
         </div>

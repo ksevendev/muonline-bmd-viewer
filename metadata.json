@@ -1,0 +1,6 @@
+{
+  "name": "MU Online BMD Viewer & Studio",
+  "description": "Visualizador 3D avançado de arquivos BMD, OZJ, ATT do MU Online com suporte a carregamento de múltiplas partes, conjuntos de armaduras, armas, animações e cenários.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

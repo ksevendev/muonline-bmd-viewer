@@ -129,9 +129,11 @@ class App {
     private readonly bmdLoader = new BMDLoader();
 
     private meshRefs: THREE.Mesh[] = [];
-    private attachments: THREE.Group[] = [];
-    private currentAttachment: THREE.Group | null = null;
-    private currentAttachmentFile: File | null = null;
+    private attachmentSlots: Array<{ file: File | null; group: THREE.Group | null; boneIndex: number }> = Array.from({ length: 12 }, () => ({
+        file: null,
+        group: null,
+        boneIndex: 0,
+    }));
     private attachmentLoadToken = 0;
     private mainSkeleton: THREE.Skeleton | null = null;
 
@@ -637,19 +639,20 @@ class App {
     private initUI() {
         logger.groupDebug('%c[App] initUI()', 'color:#0f0');
 
-        const bmdZone   = document.getElementById('bmd-drop-zone')!;
-        const bmdInput  = document.getElementById('bmd-file-input') as HTMLInputElement;
-        const animZone  = document.getElementById('anim-bmd-drop-zone')!;
-        const animInput = document.getElementById('anim-bmd-file-input') as HTMLInputElement;
-        const texZone   = document.getElementById('texture-drop-zone')!;
-        const texInput  = document.getElementById('texture-file-input') as HTMLInputElement;
+        const bmdZone   = document.getElementById('bmd-drop-zone');
+        const bmdInput  = document.getElementById('bmd-file-input') as HTMLInputElement | null;
+        const animZone  = document.getElementById('anim-bmd-drop-zone');
+        const animInput = document.getElementById('anim-bmd-file-input') as HTMLInputElement | null;
+        const texZone   = document.getElementById('texture-drop-zone');
+        const texInput  = document.getElementById('texture-file-input') as HTMLInputElement | null;
         this.exportBtn = document.getElementById('export-textures-btn') as HTMLButtonElement;
-        this.exportBtn.addEventListener('click', () => this.exportTextures());
+        if (this.exportBtn) this.exportBtn.addEventListener('click', () => this.exportTextures());
 
         const removeTexturesBtn = document.getElementById('remove-textures-btn') as HTMLButtonElement;
-        removeTexturesBtn.addEventListener('click', () => this.removeTextures());
+        if (removeTexturesBtn) removeTexturesBtn.addEventListener('click', () => this.removeTextures());
 
         this.initFolderBrowser();
+        this.initAttachmentsUI();
         
         const speedSlider = document.getElementById('speed-slider') as HTMLInputElement;
         const speedLabel = document.getElementById('speed-label')!;
@@ -662,29 +665,31 @@ class App {
         this.rendererBackendSelect = document.getElementById('renderer-backend-select') as HTMLSelectElement | null;
         this.rendererBackendStatusEl = document.getElementById('renderer-backend-status');
 
-        const exportGifBtn = document.getElementById('export-gif-btn') as HTMLButtonElement;
-        exportGifBtn.addEventListener('click', () => this.exportGif());
+        const exportGifBtn = document.getElementById('export-gif-btn') as HTMLButtonElement | null;
+        if (exportGifBtn) exportGifBtn.addEventListener('click', () => this.exportGif());
 
-        const exportGlbBtn = document.getElementById('export-glb-btn') as HTMLButtonElement;
-        exportGlbBtn.addEventListener('click', () => this.exportToGLB());
+        const exportGlbBtn = document.getElementById('export-glb-btn') as HTMLButtonElement | null;
+        if (exportGlbBtn) exportGlbBtn.addEventListener('click', () => this.exportToGLB());
 
-        const exportAiGlbBtn = document.getElementById('export-ai-glb-btn') as HTMLButtonElement;
-        exportAiGlbBtn.addEventListener('click', () => this.exportToGLB({ bakeSkinning: true }));
+        const exportAiGlbBtn = document.getElementById('export-ai-glb-btn') as HTMLButtonElement | null;
+        if (exportAiGlbBtn) exportAiGlbBtn.addEventListener('click', () => this.exportToGLB({ bakeSkinning: true }));
         
-        speedSlider.addEventListener('input', (e) => {
-            const speed = parseFloat((e.target as HTMLInputElement).value);
-            speedLabel.textContent = `Speed: ${speed.toFixed(2)}x`;
+        if (speedSlider) {
+            speedSlider.addEventListener('input', (e) => {
+                const speed = parseFloat((e.target as HTMLInputElement).value);
+                if (speedLabel) speedLabel.textContent = `Speed: ${speed.toFixed(2)}x`;
+                if (speedValue) {
+                    speedValue.textContent = `${speed.toFixed(2)}x`;
+                }
+                this.setAnimationSpeed(speed);
+                this.emitStateChanged();
+            });
+            const initialAnimationSpeed = parseFloat(speedSlider.value) || DEFAULT_ANIMATION_PLAYBACK_SPEED;
+            speedSlider.value = `${initialAnimationSpeed}`;
+            if (speedLabel) speedLabel.textContent = `Speed: ${initialAnimationSpeed.toFixed(2)}x`;
             if (speedValue) {
-                speedValue.textContent = `${speed.toFixed(2)}x`;
+                speedValue.textContent = `${initialAnimationSpeed.toFixed(2)}x`;
             }
-            this.setAnimationSpeed(speed);
-            this.emitStateChanged();
-        });
-        const initialAnimationSpeed = parseFloat(speedSlider.value) || DEFAULT_ANIMATION_PLAYBACK_SPEED;
-        speedSlider.value = `${initialAnimationSpeed}`;
-        speedLabel.textContent = `Speed: ${initialAnimationSpeed.toFixed(2)}x`;
-        if (speedValue) {
-            speedValue.textContent = `${initialAnimationSpeed.toFixed(2)}x`;
         }
 
         if (animationsEnabledCheckbox) {
@@ -710,76 +715,88 @@ class App {
         }
         this.updateRendererBackendStatus();
 
-        const status = document.getElementById('status')!;
-        status.textContent = 'Waiting for BMD file…';
+        const status = document.getElementById('status');
+        if (status) status.textContent = 'Waiting for BMD file…';
 
         this.initScaleSlider();
 
         // ### NEW ### Rotation control
-        const autoRotateCheckbox = document.getElementById('auto-rotate-checkbox') as HTMLInputElement;
-        autoRotateCheckbox.addEventListener('change', (e) => {
-            this.isAutoRotating = (e.target as HTMLInputElement).checked;
-            this.emitStateChanged();
-        });
-        this.isAutoRotating = autoRotateCheckbox.checked;
+        const autoRotateCheckbox = document.getElementById('auto-rotate-checkbox') as HTMLInputElement | null;
+        if (autoRotateCheckbox) {
+            autoRotateCheckbox.addEventListener('change', (e) => {
+                this.isAutoRotating = (e.target as HTMLInputElement).checked;
+                this.emitStateChanged();
+            });
+            this.isAutoRotating = autoRotateCheckbox.checked;
+        }
 
         /* BACKGROUND COLOR */
-        const bgInput = document.getElementById('bg-color-input') as HTMLInputElement;
-        bgInput.addEventListener('input', e => {
-            const c = (e.target as HTMLInputElement).value;
-            this.setSceneBackground(c);
-            this.emitStateChanged();
-        });
-        this.setSceneBackground(bgInput.value || '#0b1322');
+        const bgInput = document.getElementById('bg-color-input') as HTMLInputElement | null;
+        if (bgInput) {
+            bgInput.addEventListener('input', e => {
+                const c = (e.target as HTMLInputElement).value;
+                this.setSceneBackground(c);
+                this.emitStateChanged();
+            });
+            this.setSceneBackground(bgInput.value || '#0b1322');
+        }
 
         /* BRIGHTNESS */
-        const brightSlider = document.getElementById('brightness-slider') as HTMLInputElement;
-        const brightLabel  = document.getElementById('brightness-label')!;
-        brightSlider.addEventListener('input', e => {
-            const v = parseFloat((e.target as HTMLInputElement).value);
-            brightLabel.textContent = `Brightness: ${v.toFixed(2)}×`;
-            this.setBrightness(v);
-            this.emitStateChanged();
-        });
-        const initialBrightness = parseFloat(brightSlider.value) || 2.0;
-        brightLabel.textContent = `Brightness: ${initialBrightness.toFixed(2)}×`;
-        this.setBrightness(initialBrightness);
+        const brightSlider = document.getElementById('brightness-slider') as HTMLInputElement | null;
+        const brightLabel  = document.getElementById('brightness-label');
+        if (brightSlider) {
+            brightSlider.addEventListener('input', e => {
+                const v = parseFloat((e.target as HTMLInputElement).value);
+                if (brightLabel) brightLabel.textContent = `Brightness: ${v.toFixed(2)}×`;
+                this.setBrightness(v);
+                this.emitStateChanged();
+            });
+            const initialBrightness = parseFloat(brightSlider.value) || 2.0;
+            if (brightLabel) brightLabel.textContent = `Brightness: ${initialBrightness.toFixed(2)}×`;
+            this.setBrightness(initialBrightness);
+        }
 
         // ### NEW ### Diagnostic elements
-        this.diagActionsCountEl    = document.getElementById('diag-actions-count')!;
-        this.diagAnimationKeysEl   = document.getElementById('diag-animation-keys')!;
-        this.diagCurrentFrameEl    = document.getElementById('diag-current-frame')!;
-        this.diagBonesCountEl      = document.getElementById('diag-bones-count')!;
-        this.diagMeshesCountEl     = document.getElementById('diag-meshes-count')!;
-        this.diagFpsEl             = document.getElementById('diag-fps')!;
+        this.diagActionsCountEl    = document.getElementById('diag-actions-count');
+        this.diagAnimationKeysEl   = document.getElementById('diag-animation-keys');
+        this.diagCurrentFrameEl    = document.getElementById('diag-current-frame');
+        this.diagBonesCountEl      = document.getElementById('diag-bones-count');
+        this.diagMeshesCountEl     = document.getElementById('diag-meshes-count');
+        this.diagFpsEl             = document.getElementById('diag-fps');
 
         this.updateDiagnosticInfo(0); // Set initial values
 
         // ---------- FRAME LOCK ----------
-        this.lockFrameCheckbox = document.getElementById('lock-frame-checkbox') as HTMLInputElement;
-        this.lockFrameInput    = document.getElementById('lock-frame-input')    as HTMLInputElement;
-        this.lockCurrentBtn    = document.getElementById('lock-current-btn')    as HTMLButtonElement;
+        this.lockFrameCheckbox = document.getElementById('lock-frame-checkbox') as HTMLInputElement | null;
+        this.lockFrameInput    = document.getElementById('lock-frame-input')    as HTMLInputElement | null;
+        this.lockCurrentBtn    = document.getElementById('lock-current-btn')    as HTMLButtonElement | null;
 
-        this.lockFrameCheckbox.addEventListener('change', () => {
-            this.isFrameLocked = this.lockFrameCheckbox.checked;
-            if (this.isFrameLocked) this.applyLockedFrame();
-            this.emitStateChanged();
-        });
+        if (this.lockFrameCheckbox) {
+            this.lockFrameCheckbox.addEventListener('change', () => {
+                this.isFrameLocked = this.lockFrameCheckbox?.checked ?? false;
+                if (this.isFrameLocked) this.applyLockedFrame();
+                this.emitStateChanged();
+            });
+        }
 
-        this.lockFrameInput.addEventListener('input', () => {
-            this.lockedFrame = parseInt(this.lockFrameInput.value, 10) || 0;
-            if (this.isFrameLocked) this.applyLockedFrame();
-        });
+        if (this.lockFrameInput) {
+            this.lockFrameInput.addEventListener('input', () => {
+                this.lockedFrame = parseInt(this.lockFrameInput?.value || '0', 10) || 0;
+                if (this.isFrameLocked) this.applyLockedFrame();
+            });
+        }
 
-        this.lockCurrentBtn.addEventListener('click', () => {
-            // get the current frame from diagnostics
-            const cur = parseInt(this.diagCurrentFrameEl.textContent || '0', 10) || 0;
-            this.lockFrameInput.value = cur.toString();
-            this.lockedFrame = cur;
-            this.lockFrameCheckbox.checked = true;
-            this.isFrameLocked = true;
-            this.applyLockedFrame();
-        });
+        if (this.lockCurrentBtn) {
+            this.lockCurrentBtn.addEventListener('click', () => {
+                // get the current frame from diagnostics
+                const cur = parseInt(this.diagCurrentFrameEl?.textContent || '0', 10) || 0;
+                if (this.lockFrameInput) this.lockFrameInput.value = cur.toString();
+                this.lockedFrame = cur;
+                if (this.lockFrameCheckbox) this.lockFrameCheckbox.checked = true;
+                this.isFrameLocked = true;
+                this.applyLockedFrame();
+            });
+        }
 
         const setupDropZone = (zone: HTMLElement, input: HTMLInputElement, onFiles: (files: FileList) => void) => {
             zone.addEventListener('click', () => input.click());
@@ -857,87 +874,11 @@ class App {
             });
         };
 
-        setupBmdDropZoneElectron(bmdZone, bmdInput);
-        setupDropZone(animZone, animInput, files => this.handleAnimBmdFile(files[0]));
-        setupDropZone(texZone, texInput, files => this.handleMultipleTextureFiles(files));
+        if (bmdZone && bmdInput) setupBmdDropZoneElectron(bmdZone, bmdInput);
+        if (animZone && animInput) setupDropZone(animZone, animInput, files => this.handleAnimBmdFile(files[0]));
+        if (texZone && texInput) setupDropZone(texZone, texInput, files => this.handleMultipleTextureFiles(files));
 
-        // Setup attachment drop zone
-        const attachZone = document.getElementById('attach-drop-zone')!;
-        const attachInput = document.getElementById('attach-bmd-input') as HTMLInputElement;
 
-        // Special handler for Electron to get file path
-        const setupAttachmentDropZone = async (zone: HTMLElement, input: HTMLInputElement) => {
-            const clickHandler = async () => {
-                if (isElectron()) {
-                    // In Electron, use native dialog to get file path
-                    const filePath = await openFileDialog([{ name: 'BMD Files', extensions: ['bmd'] }]);
-
-                    if (filePath) {
-                        const fileData = await readFileFromPath(filePath);
-                        if (fileData) {
-                            const file = createFileFromElectronData(fileData.name, fileData.data);
-                            document.querySelector('#attach-drop-zone p')!.textContent = `Selected: ${file.name}`;
-                            this.currentAttachmentFile = file;
-                            this.lastAttachmentFilePath = filePath;
-                            this.setupAttachmentControls();
-                        }
-                    }
-                } else {
-                    // In browser, use regular file input
-                    input.click();
-                }
-            };
-
-            zone.addEventListener('click', clickHandler);
-            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-            zone.addEventListener('drop', e => {
-                e.preventDefault();
-                e.stopPropagation();  // Prevent triggering input.change
-                zone.classList.remove('drag-over');
-                if (e.dataTransfer?.files.length) {
-                    const file = e.dataTransfer.files[0];
-
-                    // Try to get file path using Electron API
-                    let filePath: string | undefined = undefined;
-                    if (isElectron()) {
-                        const electronPath = getFilePathFromFile(file);
-                        if (electronPath) {
-                            filePath = electronPath;
-                            logger.debug('[Attachment drop] Got path from Electron API:', filePath);
-                        } else {
-                            logger.warn('[Attachment drop] Could not get file path from Electron');
-                        }
-                    }
-
-                    document.querySelector('#attach-drop-zone p')!.textContent = `Selected: ${file.name}`;
-                    this.currentAttachmentFile = file;
-                    this.lastAttachmentFilePath = filePath || null;
-                    this.setupAttachmentControls();
-                }
-            });
-            // Only handle input.change if not from drag & drop
-            let isDragging = false;
-            zone.addEventListener('dragenter', () => { isDragging = true; });
-            zone.addEventListener('dragleave', () => { isDragging = false; });
-            input.addEventListener('change', e => {
-                // Skip if this was triggered by drag & drop (we already handled it)
-                if (isDragging) {
-                    isDragging = false;
-                    return;
-                }
-                const list = (e.target as HTMLInputElement).files;
-                if (list?.length) {
-                    const file = list[0];
-                    document.querySelector('#attach-drop-zone p')!.textContent = `Selected: ${file.name}`;
-                    this.currentAttachmentFile = file;
-                    this.lastAttachmentFilePath = null; // No path in browser
-                    this.setupAttachmentControls();
-                }
-            });
-        };
-
-        setupAttachmentDropZone(attachZone, attachInput);
 
         // === Drag and drop on canvas (3D scene) ===========================
         const canvasContainer = document.getElementById('canvas-container')!;
@@ -1819,17 +1760,171 @@ class App {
         }
         this.normalsVisible = false;
 
-        if (!old) {
-            Disposer.disposeObjectArray(this.attachments);
-        }
-        this.attachments = [];
-        this.currentAttachment = null;
-        this.currentAttachmentFile = null;
+        this.attachmentSlots.forEach((_, idx) => this.removeSlotAttachment(idx));
         this.appliedTextureFiles.clear();
 
         if (this.exportBtn) this.exportBtn.disabled = true;
         this.updateStageForObject(null);
         this.updateDiagnosticInfo();
+    }
+
+    private initAttachmentsUI() {
+        const container = document.getElementById('attachments-container');
+        if (!container) return;
+        container.replaceChildren();
+
+        for (let i = 0; i < 12; i++) {
+            const slotEl = document.createElement('div');
+            slotEl.className = 'control-section space-top-xs';
+            slotEl.style.padding = '8px';
+            slotEl.style.border = '1px solid rgba(255,255,255,0.1)';
+            slotEl.style.borderRadius = '6px';
+
+            slotEl.innerHTML = `
+                <div class="row-inline mb-xs" style="justify-content: space-between;">
+                    <span style="font-weight: 600; color: #38bdf8; font-size: 13px;">Slot ${i + 1}</span>
+                    <span id="attach-name-${i}" style="font-size: 12px; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">None</span>
+                </div>
+                <div class="drop-zone" id="attach-drop-${i}" style="padding: 10px; min-height: 40px; margin-bottom: 6px;" title="Attach Model to Bone">
+                    <p style="font-size: 12px; margin: 0;">Solte <strong>.bmd</strong></p>
+                    <input type="file" id="attach-input-${i}" accept=".bmd" class="file-input-hidden" />
+                </div>
+                <div id="attach-controls-${i}" class="initially-hidden">
+                    <select id="attach-bone-${i}" class="animation-dropdown full-width mb-xs" style="font-size: 12px; padding: 4px;">
+                        <option value="">-- Select Bone --</option>
+                    </select>
+                    <button id="attach-remove-${i}" class="modern-btn btn-danger" style="padding: 4px 8px; font-size: 11px; width: 100%;">Remover</button>
+                </div>
+            `;
+            container.appendChild(slotEl);
+
+            const dropZone = slotEl.querySelector(`#attach-drop-${i}`) as HTMLElement;
+            const fileInput = slotEl.querySelector(`#attach-input-${i}`) as HTMLInputElement;
+            const boneSelect = slotEl.querySelector(`#attach-bone-${i}`) as HTMLSelectElement;
+            const removeBtn = slotEl.querySelector(`#attach-remove-${i}`) as HTMLButtonElement;
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+            dropZone.addEventListener('drop', async e => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                const file = e.dataTransfer?.files?.[0];
+                if (file) {
+                    await this.loadSlotAttachment(i, file);
+                }
+            });
+            fileInput.addEventListener('change', async e => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (file) {
+                    await this.loadSlotAttachment(i, file);
+                }
+                fileInput.value = '';
+            });
+
+            boneSelect.addEventListener('change', () => {
+                const boneIndex = parseInt(boneSelect.value, 10);
+                if (!isNaN(boneIndex)) {
+                    this.setSlotAttachmentBone(i, boneIndex);
+                }
+            });
+
+            removeBtn.addEventListener('click', () => {
+                this.removeSlotAttachment(i);
+            });
+        }
+    }
+
+    private async loadSlotAttachment(slotIndex: number, file: File) {
+        if (!this.loadedGroup || !this.mainSkeleton) {
+            alert('Load a main model with a skeleton first.');
+            return;
+        }
+
+        try {
+            await FileValidator.validateBMDFile(file);
+            const buffer = await file.arrayBuffer();
+            const bmd = this.bmdLoader.parse(buffer, { bindPoseOnly: true });
+            const group = await this.buildThumbnailGroup(bmd, this.folderTextureFiles);
+            this.applySceneMaterialTuning(group);
+
+            this.removeSlotAttachment(slotIndex);
+
+            this.attachmentSlots[slotIndex].file = file;
+            this.attachmentSlots[slotIndex].group = group;
+            this.attachmentSlots[slotIndex].boneIndex = 0;
+
+            const bone = this.mainSkeleton.bones[0];
+            if (bone) {
+                bone.add(group);
+            } else {
+                this.scene.add(group);
+            }
+
+            const nameEl = document.getElementById(`attach-name-${slotIndex}`);
+            if (nameEl) nameEl.textContent = file.name;
+
+            const controlsEl = document.getElementById(`attach-controls-${slotIndex}`);
+            if (controlsEl) controlsEl.style.display = 'block';
+
+            const boneSelect = document.getElementById(`attach-bone-${slotIndex}`) as HTMLSelectElement;
+            if (boneSelect) {
+                boneSelect.innerHTML = '<option value="">-- Select Bone --</option>';
+                this.mainSkeleton.bones.forEach((b, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = idx.toString();
+                    opt.textContent = `${idx}: ${b.name || 'Bone ' + idx}`;
+                    boneSelect.appendChild(opt);
+                });
+                boneSelect.value = '0';
+            }
+
+            this.setStatusMessage(`Attached ${file.name} to slot ${slotIndex + 1}.`);
+        } catch (error) {
+            logger.error(`Failed to load attachment for slot ${slotIndex}:`, error);
+            alert(`Failed to load attachment: ${(error as Error).message}`);
+        }
+    }
+
+    private setSlotAttachmentBone(slotIndex: number, boneIndex: number) {
+        const slot = this.attachmentSlots[slotIndex];
+        if (!slot || !slot.group || !this.mainSkeleton) return;
+
+        const oldParent = slot.group.parent;
+        if (oldParent) oldParent.remove(slot.group);
+
+        slot.boneIndex = boneIndex;
+        const targetBone = this.mainSkeleton.bones[boneIndex];
+        if (targetBone) {
+            targetBone.add(slot.group);
+            slot.group.position.set(0, 0, 0);
+            slot.group.rotation.set(0, 0, 0);
+            slot.group.scale.set(1, 1, 1);
+        }
+    }
+
+    private removeSlotAttachment(slotIndex: number) {
+        const slot = this.attachmentSlots[slotIndex];
+        if (!slot) return;
+
+        if (slot.group) {
+            const parent = slot.group.parent;
+            if (parent) parent.remove(slot.group);
+            Disposer.disposeObject3D(slot.group, false);
+        }
+
+        slot.file = null;
+        slot.group = null;
+        slot.boneIndex = 0;
+
+        const nameEl = document.getElementById(`attach-name-${slotIndex}`);
+        if (nameEl) nameEl.textContent = 'None';
+
+        const controlsEl = document.getElementById(`attach-controls-${slotIndex}`);
+        if (controlsEl) controlsEl.style.display = 'none';
+
+        const boneSelect = document.getElementById(`attach-bone-${slotIndex}`) as HTMLSelectElement;
+        if (boneSelect) boneSelect.value = '';
     }
     
     //----------------------------------------------------------
@@ -3552,16 +3647,25 @@ class App {
     }
 }
 
-const { explorerStore, initialState } = createExplorerStateStore();
-const app = new App(initialState.bmd.rendererBackend);
-const characterScene = new CharacterTestScene();
-const terrainScene = new TerrainScene();
-initControlMenu();
+const initAppModules = () => {
+    const { explorerStore, initialState } = createExplorerStateStore();
+    const app = new App(initialState.bmd.rendererBackend);
+    const characterScene = new CharacterTestScene();
+    const terrainScene = new TerrainScene();
+    initControlMenu();
 
-initExplorerShell({
-    app,
-    characterScene,
-    terrainScene,
-    explorerStore,
-    initialState,
-});
+    initExplorerShell({
+        app,
+        characterScene,
+        terrainScene,
+        explorerStore,
+        initialState,
+    });
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAppModules);
+} else {
+    initAppModules();
+}
+
