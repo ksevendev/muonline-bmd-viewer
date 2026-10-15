@@ -798,23 +798,29 @@ class App {
             });
         }
 
-        const setupDropZone = (zone: HTMLElement, input: HTMLInputElement, onFiles: (files: FileList) => void) => {
-            zone.addEventListener('click', () => input.click());
-            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-            zone.addEventListener('drop', e => {
-                e.preventDefault();
-                zone.classList.remove('drag-over');
-                if (e.dataTransfer?.files.length) onFiles(e.dataTransfer.files);
-            });
-            input.addEventListener('change', e => {
-                const list = (e.target as HTMLInputElement).files;
-                if (list?.length) onFiles(list);
-            });
+        const setupDropZone = (zone: HTMLElement | null, input: HTMLInputElement | null, onFiles: (files: FileList) => void) => {
+            if (!zone || !input) return;
+            if (zone) {
+                zone.addEventListener('click', () => input.click());
+                zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+                zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+                zone.addEventListener('drop', e => {
+                    e.preventDefault();
+                    zone.classList.remove('drag-over');
+                    if (e.dataTransfer?.files.length) onFiles(e.dataTransfer.files);
+                });
+            }
+            if (input) {
+                input.addEventListener('change', e => {
+                    const list = (e.target as HTMLInputElement).files;
+                    if (list?.length) onFiles(list);
+                });
+            }
         };
 
         // Special handler for BMD files in Electron - use file dialog to get path
-        const setupBmdDropZoneElectron = async (zone: HTMLElement, input: HTMLInputElement) => {
+        const setupBmdDropZoneElectron = async (zone: HTMLElement | null, input: HTMLInputElement | null) => {
+            if (!zone || !input) return;
             const clickHandler = async () => {
                 if (isElectron()) {
                     // In Electron, use native dialog to get file path
@@ -829,49 +835,55 @@ class App {
                     }
                 } else {
                     // In browser, use regular file input
-                    input.click();
+                    if (input) input.click();
                 }
             };
 
-            zone.addEventListener('click', clickHandler);
-            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-            zone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();  // Prevent triggering input.change
-                zone.classList.remove('drag-over');
+            if (zone) {
+                zone.addEventListener('click', clickHandler);
+                zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+                zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+                zone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();  // Prevent triggering input.change
+                    zone.classList.remove('drag-over');
 
-                if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-                    const file = e.dataTransfer.files[0];
+                    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                        const file = e.dataTransfer.files[0];
 
-                    // Try to get file path using Electron API
-                    let filePath: string | undefined = undefined;
-                    if (isElectron()) {
-                        const electronPath = getFilePathFromFile(file);
-                        if (electronPath) {
-                            filePath = electronPath;
-                            logger.debug('[BMD drop] Got path from Electron API:', filePath);
-                        } else {
-                            logger.warn('[BMD drop] Could not get file path from Electron');
+                        // Try to get file path using Electron API
+                        let filePath: string | undefined = undefined;
+                        if (isElectron()) {
+                            const electronPath = getFilePathFromFile(file);
+                            if (electronPath) {
+                                filePath = electronPath;
+                                logger.debug('[BMD drop] Got path from Electron API:', filePath);
+                            } else {
+                                logger.warn('[BMD drop] Could not get file path from Electron');
+                            }
                         }
-                    }
 
-                    this.handleBmdFile(file, filePath);
-                }
-            });
+                        this.handleBmdFile(file, filePath);
+                    }
+                });
+            }
             // Only handle input.change if not from drag & drop
             let isDragging = false;
-            zone.addEventListener('dragenter', () => { isDragging = true; });
-            zone.addEventListener('dragleave', () => { isDragging = false; });
-            input.addEventListener('change', e => {
-                // Skip if this was triggered by drag & drop (we already handled it)
-                if (isDragging) {
-                    isDragging = false;
-                    return;
-                }
-                const list = (e.target as HTMLInputElement).files;
-                if (list?.length) this.handleBmdFile(list[0]);
-            });
+            if (zone) {
+                zone.addEventListener('dragenter', () => { isDragging = true; });
+                zone.addEventListener('dragleave', () => { isDragging = false; });
+            }
+            if (input) {
+                input.addEventListener('change', e => {
+                    // Skip if this was triggered by drag & drop (we already handled it)
+                    if (isDragging) {
+                        isDragging = false;
+                        return;
+                    }
+                    const list = (e.target as HTMLInputElement).files;
+                    if (list?.length) this.handleBmdFile(list[0]);
+                });
+            }
         };
 
         if (bmdZone && bmdInput) setupBmdDropZoneElectron(bmdZone, bmdInput);
@@ -881,16 +893,17 @@ class App {
 
 
         // === Drag and drop on canvas (3D scene) ===========================
-        const canvasContainer = document.getElementById('canvas-container')!;
+        const canvasContainer = document.getElementById('canvas-container');
 
-        canvasContainer.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
+        if (canvasContainer) {
+            canvasContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
 
-        canvasContainer.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            canvasContainer.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
 
             if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) return;
 
@@ -931,73 +944,92 @@ class App {
                 logger.warn('[Canvas drop] No BMD or texture files found in drop');
             }
         });
+        }
 
         // === Show / hide skeleton =========================================
-        showSkeletonEl.addEventListener('change', () => {
-            if (skeletonHelper) skeletonHelper.visible = showSkeletonEl.checked;
-            this.emitStateChanged();
-        });
+        const showSkeletonEl = document.getElementById('show-skeleton-checkbox') as HTMLInputElement | null;
+        if (showSkeletonEl) {
+            showSkeletonEl.addEventListener('change', () => {
+                if (skeletonHelper) skeletonHelper.visible = showSkeletonEl.checked;
+                this.emitStateChanged();
+            });
+        }
 
         // === Wireframe on/off ===============================================
-        wireframeEl.addEventListener('change', () => {
-            const flag = wireframeEl.checked;
-            this.scene.traverse(obj => {
-                if ((obj as any).isMesh) {
-                    const mat = (obj as THREE.Mesh).material as THREE.Material;
-                    if ('wireframe' in mat) {
-                        (mat as any).wireframe = flag;
-                        mat.needsUpdate = true;
+        const wireframeEl = document.getElementById('wireframe-checkbox') as HTMLInputElement | null;
+        if (wireframeEl) {
+            wireframeEl.addEventListener('change', () => {
+                const flag = wireframeEl.checked;
+                this.scene.traverse(obj => {
+                    if ((obj as any).isMesh) {
+                        const mat = (obj as THREE.Mesh).material as THREE.Material;
+                        if ('wireframe' in mat) {
+                            (mat as any).wireframe = flag;
+                            mat.needsUpdate = true;
+                        }
                     }
-                }
+                });
+                this.emitStateChanged();
             });
-            this.emitStateChanged();
-        });
+        }
 
         // === Bounding box / axes / normals ================================
-        this.showBoundingBoxCheckbox = document.getElementById('show-bbox-checkbox') as HTMLInputElement;
-        this.showAxesCheckbox        = document.getElementById('show-axes-checkbox') as HTMLInputElement;
-        this.showNormalsCheckbox     = document.getElementById('show-normals-checkbox') as HTMLInputElement;
+        this.showBoundingBoxCheckbox = document.getElementById('show-bbox-checkbox') as HTMLInputElement | null;
+        this.showAxesCheckbox        = document.getElementById('show-axes-checkbox') as HTMLInputElement | null;
+        this.showNormalsCheckbox     = document.getElementById('show-normals-checkbox') as HTMLInputElement | null;
 
-        this.showBoundingBoxCheckbox.addEventListener('change', () => {
-            this.updateBoundingBoxHelperState();
-            this.emitStateChanged();
-        });
+        if (this.showBoundingBoxCheckbox) {
+            this.showBoundingBoxCheckbox.addEventListener('change', () => {
+                this.updateBoundingBoxHelperState();
+                this.emitStateChanged();
+            });
+        }
 
-        this.showAxesCheckbox.addEventListener('change', () => {
-            this.updateAxesHelperState();
-            this.emitStateChanged();
-        });
+        if (this.showAxesCheckbox) {
+            this.showAxesCheckbox.addEventListener('change', () => {
+                this.updateAxesHelperState();
+                this.emitStateChanged();
+            });
+        }
 
-        this.showNormalsCheckbox.addEventListener('change', () => {
-            this.updateNormalsHelpersState();
-            this.emitStateChanged();
-        });
+        if (this.showNormalsCheckbox) {
+            this.showNormalsCheckbox.addEventListener('change', () => {
+                this.updateNormalsHelpersState();
+                this.emitStateChanged();
+            });
+        }
 
         // === attach model to bone (dropdown + slider) ===============================
-        const attachBoneSelect = document.getElementById('attach-bone-select') as HTMLSelectElement;
-        const attachBoneSlider = document.getElementById('attach-bone-slider') as HTMLInputElement;
-        const attachBoneValue = document.getElementById('attach-bone-value')!;
-        const undoAttachBtn = document.getElementById('undo-attach-btn') as HTMLButtonElement;
+        const attachBoneSelect = document.getElementById('attach-bone-select') as HTMLSelectElement | null;
+        const attachBoneSlider = document.getElementById('attach-bone-slider') as HTMLInputElement | null;
+        const attachBoneValue = document.getElementById('attach-bone-value');
+        const undoAttachBtn = document.getElementById('undo-attach-btn') as HTMLButtonElement | null;
 
         // Sync dropdown with slider
-        attachBoneSelect.addEventListener('change', () => {
-            const boneIndex = parseInt(attachBoneSelect.value);
-            if (!isNaN(boneIndex)) {
-                attachBoneSlider.value = boneIndex.toString();
-                attachBoneValue.textContent = boneIndex.toString();
-                this.changeBoneForAttachment(boneIndex);
-            }
-        });
+        if (attachBoneSelect) {
+            attachBoneSelect.addEventListener('change', () => {
+                const boneIndex = parseInt(attachBoneSelect.value);
+                if (!isNaN(boneIndex)) {
+                    if (attachBoneSlider) attachBoneSlider.value = boneIndex.toString();
+                    if (attachBoneValue) attachBoneValue.textContent = boneIndex.toString();
+                    this.changeBoneForAttachment(boneIndex);
+                }
+            });
+        }
 
         // Sync slider with dropdown
-        attachBoneSlider.addEventListener('input', () => {
-            const boneIndex = parseInt(attachBoneSlider.value);
-            attachBoneSelect.value = boneIndex.toString();
-            attachBoneValue.textContent = boneIndex.toString();
-            this.changeBoneForAttachment(boneIndex);
-        });
+        if (attachBoneSlider) {
+            attachBoneSlider.addEventListener('input', () => {
+                const boneIndex = parseInt(attachBoneSlider.value);
+                if (attachBoneSelect) attachBoneSelect.value = boneIndex.toString();
+                if (attachBoneValue) attachBoneValue.textContent = boneIndex.toString();
+                this.changeBoneForAttachment(boneIndex);
+            });
+        }
 
-        undoAttachBtn.addEventListener('click', () => this.removeAttachment());
+        if (undoAttachBtn) {
+            undoAttachBtn.addEventListener('click', () => this.removeAttachment());
+        }
 
         logger.groupEnd();
     }
